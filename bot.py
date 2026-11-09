@@ -2,6 +2,7 @@ import os
 import re
 import logging
 import requests
+import psycopg2
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ChatAction
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
@@ -12,8 +13,8 @@ TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 YANDEX_FOLDER_ID = os.environ.get("YANDEX_FOLDER_ID")
 YANDEX_API_KEY = os.environ.get("YANDEX_API_KEY")
 OWNER_CHAT_ID = os.environ.get("OWNER_CHAT_ID")
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
-# Распознаёт российские телефоны: +7 999 123-45-67, 89991234567 и т.п.
 PHONE_REGEX = re.compile(r'(\+7|8)[\s\-\(]*\d{3}[\s\-\)]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2}')
 
 SYSTEM_PROMPT = """Ты — онлайн-администратор салона красоты "Моя".
@@ -43,12 +44,72 @@ SYSTEM_PROMPT = """Ты — онлайн-администратор салона
 2. Если ответа нет в карточке — честно скажи, что уточнишь у администратора, и предложи оставить контакт.
 3. Не обещай точное свободное окно: обсуди желаемое время и скажи, что слот подтвердит администратор.
 4. Отвечай по-русски, тепло и кратко (2–4 предложения), уместно 1–2 эмодзи.
-5. 5. Если клиент хочет записаться: в ПЕРВОМ же ответе подтверди услугу и желаемое время И обязательно попроси контактный телефон в этом же сообщении — без него запись не оформить. Не откладывай просьбу о телефоне на следующие ответы.
+5. Если клиент хочет записаться: в ПЕРВОМ же ответе подтверди услугу и желаемое время И обязательно попроси контактный телефон в этом же сообщении — без него запись не оформить. Не откладывай просьбу о телефоне на следующие ответы.
 """
 
 SUMMARY_PROMPT = ("Ты — помощник администратора салона. По диалогу ниже опиши запрос клиента "
                   "ОДНОЙ строкой: услуга, мастер, желаемые дата и время. Пиши только суть, "
                   "без приветствий. Если чего-то не известно — просто пропусти.")
+
+# ---------- БАЗА ДАННЫХ ----------
+
+def db_connect():
+    return psycopg2.connect(DATABASE_URL, sslmode="require")
+
+def db_init():
+    conn = db_connect()
+    cur = conn.cursor()
+    # Закладка на мультитенантность: будущие салоны будут жить здесь
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS salons (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL,
+            card TEXT NOT NULL,
+            owner_chat_id BIGINT,
+            bot_token TEXT,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS leads (
+            id SERIAL PRIMARY KEY,
+            salon_id INTEGER NOT NULL DEFAULT 1,
+            client_name TEXT,
+            phone TEXT,
+            summary TEXT,
+            status TEXT DEFAULT 'new',
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+
+def save_lead(client_name, phone, summary):
+    conn = db_connect()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO leads (client_name, phone, summary) VALUES (%s, %s, %s)",
+        (client_name, phone, summary),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+def fetch_leads(limit=10):
+    conn = db_connect()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT client_name, phone, summary, status, created_at "
+        "FROM leads ORDER BY created_at DESC LIMIT %s",
+        (limit,),
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return rows
+
+# ---------- AI ----------
 
 def ask_yandex_gpt(user_text, history, system_text=None):
     url = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
@@ -69,6 +130,8 @@ def ask_yandex_gpt(user_text, history, system_text=None):
     response = requests.post(url, headers=headers, json=payload, timeout=30)
     response.raise_for_status()
     return response.json()["result"]["alternatives"][0]["message"]["text"]
+
+# ---------- ОБРАБОТЧИКИ ----------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
@@ -95,6 +158,26 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "help":
         await query.edit_message_text("❓ Просто задайте любой вопрос о салоне — я отвечу!")
 
+async def leads_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if str(update.effective_user.id) != str(OWNER_CHAT_ID):
+        await update.message.reply_text("⛔ Эта команда доступна только владельцу салона.")
+        return
+    try:
+        rows = fetch_leads(10)
+    except Exception as e:
+        logging.error("DB fetch error: %s", e)
+        await update.message.reply_text("Не смог достать данные из базы 😔")
+        return
+    if not rows:
+        await update.message.reply_text("📭 Заявок пока нет.")
+        return
+    lines = ["📥 Последние 10 заявок:"]
+    for name, phone, summary, status, created_at in rows:
+        lines.append(
+            f"• {created_at.strftime('%d.%m %H:%M')} | {name} | {phone} | {status}\n  {summary}"
+        )
+    await update.message.reply_text("\n".join(lines))
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     await update.effective_chat.send_action(ChatAction.TYPING)
@@ -108,6 +191,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logging.error("Summary error: %s", e)
             summary = " ; ".join(m["text"] for m in history if m["role"] == "user")[-300:]
+
+        try:
+            save_lead(update.effective_user.full_name, phone, summary)
+        except Exception as e:
+            logging.error("DB save error: %s", e)
 
         if OWNER_CHAT_ID:
             await context.bot.send_message(
@@ -144,11 +232,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(answer)
 
 def main():
+    db_init()
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("leads", leads_command))
     app.add_handler(CallbackQueryHandler(button))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    print("✅ Бот с приёмом заявок запущен!")
+    print("✅ Бот с базой заявок запущен!")
     app.run_polling()
 
 if __name__ == "__main__":
