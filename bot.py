@@ -1,4 +1,5 @@
 import os
+import re
 import logging
 import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -10,6 +11,10 @@ logging.basicConfig(level=logging.INFO)
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 YANDEX_FOLDER_ID = os.environ.get("YANDEX_FOLDER_ID")
 YANDEX_API_KEY = os.environ.get("YANDEX_API_KEY")
+OWNER_CHAT_ID = os.environ.get("OWNER_CHAT_ID")
+
+# Распознаёт российские телефоны: +7 999 123-45-67, 89991234567 и т.п.
+PHONE_REGEX = re.compile(r'(\+7|8)[\s\-\(]*\d{3}[\s\-\)]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2}')
 
 SYSTEM_PROMPT = """Ты — онлайн-администратор салона красоты "Моя".
 Ты общаешься с клиентами в Telegram: отвечаешь на вопросы и помогаешь записаться.
@@ -36,19 +41,23 @@ SYSTEM_PROMPT = """Ты — онлайн-администратор салона
 ПРАВИЛА:
 1. Отвечай ТОЛЬКО по карточке. Не придумывай цены, акции и скидки.
 2. Если ответа нет в карточке — честно скажи, что уточнишь у администратора, и предложи оставить контакт.
-3. Не обещай точное свободное окно: обсудь желаемое время и скажи, что слот подтвердит администратор.
+3. Не обещай точное свободное окно: обсуди желаемое время и скажи, что слот подтвердит администратор.
 4. Отвечай по-русски, тепло и кратко (2–4 предложения), уместно 1–2 эмодзи.
-5. Если клиент хочет записаться: уточни услугу, мастера, желаемые дату и время.
+5. Если клиент хочет записаться: уточни услугу, мастера, желаемые дату и время, затем попроси контактный телефон.
 """
 
-def ask_yandex_gpt(user_text, history):
+SUMMARY_PROMPT = ("Ты — помощник администратора салона. По диалогу ниже опиши запрос клиента "
+                  "ОДНОЙ строкой: услуга, мастер, желаемые дата и время. Пиши только суть, "
+                  "без приветствий. Если чего-то не известно — просто пропусти.")
+
+def ask_yandex_gpt(user_text, history, system_text=None):
     url = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
     headers = {
         "Authorization": f"Api-Key {YANDEX_API_KEY}",
         "Content-Type": "application/json",
     }
     messages = (
-        [{"role": "system", "text": SYSTEM_PROMPT}]
+        [{"role": "system", "text": system_text or SYSTEM_PROMPT}]
         + history
         + [{"role": "user", "text": user_text}]
     )
@@ -90,6 +99,39 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     await update.effective_chat.send_action(ChatAction.TYPING)
     history = context.user_data.setdefault("history", [])
+
+    phone_match = PHONE_REGEX.search(text)
+    if phone_match:
+        phone = phone_match.group(0)
+        try:
+            summary = ask_yandex_gpt("Опиши запрос клиента одной строкой.", history, system_text=SUMMARY_PROMPT)
+        except Exception as e:
+            logging.error("Summary error: %s", e)
+            summary = " ; ".join(m["text"] for m in history if m["role"] == "user")[-300:]
+
+        if OWNER_CHAT_ID:
+            await context.bot.send_message(
+                chat_id=int(OWNER_CHAT_ID),
+                text=(
+                    "🔥 Новая заявка!\n"
+                    f"📋 {summary}\n"
+                    f"📞 Телефон: {phone}\n"
+                    f"👤 Клиент: {update.effective_user.full_name}"
+                ),
+            )
+            await update.message.reply_text(
+                "Спасибо! Я передал вашу заявку администратору — "
+                "он свяжется с вами в ближайшее время для подтверждения времени 😊"
+            )
+        else:
+            await update.message.reply_text(
+                "Спасибо, я записал ваш номер! Администратор свяжется с вами для подтверждения времени 😊"
+            )
+        history.append({"role": "user", "text": text})
+        history.append({"role": "assistant", "text": "Заявка принята, администратор свяжется с вами."})
+        context.user_data["history"] = history[-6:]
+        return
+
     try:
         answer = ask_yandex_gpt(text, history)
     except Exception as e:
@@ -106,7 +148,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    print("✅ Бот с мозгом запущен!")
+    print("✅ Бот с приёмом заявок запущен!")
     app.run_polling()
 
 if __name__ == "__main__":
