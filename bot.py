@@ -17,6 +17,14 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 
 PHONE_REGEX = re.compile(r'(\+7|8)[\s\-\(]*\d{3}[\s\-\)]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2}')
 
+STATUS_LABELS = {
+    "new": "🆕 новая",
+    "confirmed": "✅ подтверждена",
+    "completed": "💰 выполнена",
+    "cancelled": "❌ отменена",
+    "no_show": "👻 неявка",
+}
+
 SYSTEM_PROMPT = """Ты — онлайн-администратор салона красоты "Моя".
 Ты общаешься с клиентами в Telegram: отвечаешь на вопросы и помогаешь записаться.
 
@@ -59,7 +67,6 @@ def db_connect():
 def db_init():
     conn = db_connect()
     cur = conn.cursor()
-    # Закладка на мультитенантность: будущие салоны будут жить здесь
     cur.execute("""
         CREATE TABLE IF NOT EXISTS salons (
             id SERIAL PRIMARY KEY,
@@ -89,18 +96,37 @@ def save_lead(client_name, phone, summary):
     conn = db_connect()
     cur = conn.cursor()
     cur.execute(
-        "INSERT INTO leads (client_name, phone, summary) VALUES (%s, %s, %s)",
+        "INSERT INTO leads (client_name, phone, summary) VALUES (%s, %s, %s) RETURNING id",
         (client_name, phone, summary),
     )
+    lead_id = cur.fetchone()[0]
     conn.commit()
     cur.close()
     conn.close()
+    return lead_id
+
+def update_lead_status(lead_id, status):
+    conn = db_connect()
+    cur = conn.cursor()
+    cur.execute("UPDATE leads SET status = %s WHERE id = %s", (status, lead_id))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+def fetch_lead(lead_id):
+    conn = db_connect()
+    cur = conn.cursor()
+    cur.execute("SELECT client_name, phone, summary, status FROM leads WHERE id = %s", (lead_id,))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return row
 
 def fetch_leads(limit=10):
     conn = db_connect()
     cur = conn.cursor()
     cur.execute(
-        "SELECT client_name, phone, summary, status, created_at "
+        "SELECT id, client_name, phone, summary, status, created_at "
         "FROM leads ORDER BY created_at DESC LIMIT %s",
         (limit,),
     )
@@ -145,19 +171,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    if query.data == "book":
-        await query.edit_message_text(
-            "📝 Отлично! Напишите своими словами: какую услугу хотите, "
-            "к кому и когда. Например: «Хочу к Алии на стрижку в субботу вечером»."
-        )
-    elif query.data == "my_bookings":
-        await query.edit_message_text("📅 У вас пока нет активных записей.")
-    elif query.data == "help":
-        await query.edit_message_text("❓ Просто задайте любой вопрос о салоне — я отвечу!")
-
 async def leads_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if str(update.effective_user.id) != str(OWNER_CHAT_ID):
         await update.message.reply_text("⛔ Эта команда доступна только владельцу салона.")
@@ -172,11 +185,55 @@ async def leads_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("📭 Заявок пока нет.")
         return
     lines = ["📥 Последние 10 заявок:"]
-    for name, phone, summary, status, created_at in rows:
+    for lead_id, name, phone, summary, status, created_at in rows:
         lines.append(
-            f"• {created_at.strftime('%d.%m %H:%M')} | {name} | {phone} | {status}\n  {summary}"
+            f"• #{lead_id} {created_at.strftime('%d.%m %H:%M')} | {name} | {phone}\n"
+            f"  {STATUS_LABELS.get(status, status)}\n"
+            f"  {summary}"
         )
+    lines.append("\nСтатусы меняются кнопками прямо на 🔥-уведомлении.")
     await update.message.reply_text("\n".join(lines))
+
+async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    # Кнопки владельца на 🔥-уведомлении
+    if data.startswith("lead:"):
+        if str(update.effective_user.id) != str(OWNER_CHAT_ID):
+            return
+        _, action, lead_id_s = data.split(":")
+        lead_id = int(lead_id_s)
+        try:
+            update_lead_status(lead_id, action)
+            lead = fetch_lead(lead_id)
+        except Exception as e:
+            logging.error("Lead status error: %s", e)
+            return
+        base_text = (query.message.text or "").split("\n\n— Статус")[0]
+        await query.edit_message_text(base_text + f"\n\n— Статус изменён: {STATUS_LABELS[action]}")
+        if action in ("cancelled", "no_show") and lead:
+            await context.bot.send_message(
+                chat_id=int(OWNER_CHAT_ID),
+                text=(
+                    f"🕳 Освободился слот: {lead[2]}.\n"
+                    "Когда подключим расписание, бот сам предложит его листу ожидания. "
+                    "Пока — напоминание для вас."
+                ),
+            )
+        return
+
+    # Клиентские кнопки
+    if data == "book":
+        await query.edit_message_text(
+            "📝 Отлично! Напишите своими словами: какую услугу хотите, "
+            "к кому и когда. Например: «Хочу к Алии на стрижку в субботу вечером»."
+        )
+    elif data == "my_bookings":
+        await query.edit_message_text("📅 У вас пока нет активных записей.")
+    elif data == "help":
+        await query.edit_message_text("❓ Просто задайте любой вопрос о салоне — я отвечу!")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
@@ -192,12 +249,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logging.error("Summary error: %s", e)
             summary = " ; ".join(m["text"] for m in history if m["role"] == "user")[-300:]
 
+        lead_id = None
         try:
-            save_lead(update.effective_user.full_name, phone, summary)
+            lead_id = save_lead(update.effective_user.full_name, phone, summary)
         except Exception as e:
             logging.error("DB save error: %s", e)
 
         if OWNER_CHAT_ID:
+            keyboard = None
+            if lead_id:
+                keyboard = InlineKeyboardMarkup([
+                    [
+                        InlineKeyboardButton("✅ Подтверждена", callback_data=f"lead:confirmed:{lead_id}"),
+                        InlineKeyboardButton("💰 Выполнена", callback_data=f"lead:completed:{lead_id}"),
+                    ],
+                    [
+                        InlineKeyboardButton("❌ Отмена", callback_data=f"lead:cancelled:{lead_id}"),
+                        InlineKeyboardButton("👻 Неявка", callback_data=f"lead:no_show:{lead_id}"),
+                    ],
+                ])
             await context.bot.send_message(
                 chat_id=int(OWNER_CHAT_ID),
                 text=(
@@ -206,6 +276,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"📞 Телефон: {phone}\n"
                     f"👤 Клиент: {update.effective_user.full_name}"
                 ),
+                reply_markup=keyboard,
             )
             await update.message.reply_text(
                 "Спасибо! Я передал вашу заявку администратору — "
@@ -238,7 +309,7 @@ def main():
     app.add_handler(CommandHandler("leads", leads_command))
     app.add_handler(CallbackQueryHandler(button))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    print("✅ Бот с базой заявок запущен!")
+    print("✅ Бот со статусами заявок запущен!")
     app.run_polling()
 
 if __name__ == "__main__":
