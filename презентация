@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Умный администратор для салона — презентация</title>
+<style>
+:root{
+  --plum-900:#241432; --plum-800:#2E1B40; --plum-700:#3A2B45;
+  --berry:#D63D6E; --berry-deep:#B02458; --magenta:#E85D9E;
+  --amber:#F2A93B; --gold:#E8B04B; --teal:#2EC4B6; --teal-deep:#159A8C;
+  --violet:#7C4DFF; --cream:#FFF8F3; --blush:#FFE9EF; --paper:#fff;
+  --ink:#2B2135; --ink-soft:#6E5F7C; --line:#EBD9E2;
+  --danger:#E0455E; --ok:#2EC4B6; --warn:#F2A93B; --info:#7C4DFF;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;color:var(--ink);background:var(--plum-900);overflow:hidden}
+h1,h2,.serif{font-family:Georgia,'Times New Roman',serif;letter-spacing:-.01em}
+.grain{position:fixed;inset:0;z-index:60;pointer-events:none;opacity:.05;mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E")}
+.progress{position:fixed;top:0;left:0;height:3px;width:0;z-index:80;background:linear-gradient(90deg,var(--berry),var(--amber));transition:width .4s}
+.topbar{position:fixed;top:0;left:0;right:0;height:56px;z-index:70;display:flex;align-items:center;justify-content:space-between;padding:0 20px;
+  background:rgba(36,20,50,.55);backdrop-filter:blur(10px);border-bottom:1px solid rgba(255,255,255,.08);color:var(--cream)}
+.brand{font-family:Georgia,serif;font-size:1.05rem;letter-spacing:.02em}
+.brand b{color:var(--gold)}
+.topctl{display:flex;gap:8px;align-items:center}
+.topctl button{background:rgba(255,255,255,.1);color:var(--cream);border:1px solid rgba(255,255,255,.18);border-radius:10px;padding:6px 12px;font-size:.85rem;cursor:pointer;transition:.2s}
+.topctl button:hover{background:var(--berry);border-color:var(--berry)}
+#counter{font-size:.85rem;opacity:.8;min-width:44px;text-align:center}
+.deck{position:relative;height:100vh;height:100dvh}
+.slide{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;padding:84px 6vw 110px;opacity:0;visibility:hidden;transform:translateX(28px);
+  transition:opacity .45s ease,transform .45s ease,visibility .45s;
+  scrollbar-width:thin;scrollbar-color:var(--berry) var(--blush)}
+.slide::-webkit-scrollbar{width:10px}
+.slide::-webkit-scrollbar-track{background:var(--blush)}
+.slide::-webkit-scrollbar-thumb{background:linear-gradient(var(--berry),var(--violet));border-radius:8px}
+.slide::-webkit-scrollbar-thumb:hover{background:var(--berry-deep)}
+.slide.active{opacity:1;visibility:visible;transform:none}
+.slide.light{background:
+  radial-gradient(900px 500px at 85% -10%,rgba(124,77,255,.10),transparent 60%),
+  radial-gradient(800px 520px at -10% 110%,rgba(214,61,110,.12),transparent 60%),
+  linear-gradient(135deg,var(--cream) 0%,var(--blush) 100%)}
+.slide.cool{background:
+  radial-gradient(900px 500px at 90% 0%,rgba(46,196,182,.12),transparent 60%),
+  radial-gradient(700px 500px at 0% 100%,rgba(124,77,255,.10),transparent 60%),
+  linear-gradient(135deg,#FDF6F0,#F3EBFA)}
+.slide.dark{background:
+  radial-gradient(1000px 600px at 80% -20%,rgba(214,61,110,.35),transparent 60%),
+  radial-gradient(800px 600px at 10% 120%,rgba(124,77,255,.30),transparent 60%),
+  linear-gradient(150deg,var(--plum-800),var(--plum-900));color:var(--cream)}
+.orb{position:absolute;border-radius:50%;filter:blur(70px);opacity:.5;pointer-events:none;animation:float 14s ease-in-out infinite alternate}
+.orb.o1{width:340px;height:340px;background:var(--magenta);top:-80px;right:-60px}
+.orb.o2{width:280px;height:280px;background:var(--violet);bottom:-70px;left:-50px;animation-delay:-6s}
+.orb.o3{width:220px;height:220px;background:var(--amber);top:40%;left:55%;opacity:.25;animation-delay:-3s}
+.slide.dark .orb{opacity:.35}
+@keyframes float{from{transform:translate(0,0) scale(1)}to{transform:translate(30px,-24px) scale(1.08)}}
+.inner{position:relative;z-index:2;max-width:1200px;margin:0 auto;display:grid;grid-template-columns:1.05fr .95fr;gap:clamp(24px,4vw,56px);align-items:center;min-height:calc(100vh - 200px)}
+.inner.center{grid-template-columns:1fr;text-align:center;justify-items:center}
+.kicker{display:inline-block;font-size:.8rem;letter-spacing:.18em;text-transform:uppercase;color:var(--berry);font-weight:700;margin-bottom:14px;
+  border:1px solid rgba(214,61,110,.35);border-radius:999px;padding:5px 14px;background:rgba(255,255,255,.5)}
+.slide.dark .kicker{color:var(--gold);border-color:rgba(232,176,75,.4);background:rgba(255,255,255,.06)}
+h1{font-size:clamp(2.1rem,4.6vw,3.5rem);line-height:1.12;margin-bottom:18px}
+h2{font-size:clamp(1.6rem,3.2vw,2.4rem);line-height:1.15;margin-bottom:22px}
+.sub{font-size:clamp(1.02rem,1.6vw,1.25rem);color:var(--ink-soft);line-height:1.55;margin-bottom:18px}
+.slide.dark .sub{color:#D9CBE4}
+.cards{display:grid;gap:12px}
+.card{background:var(--paper);border-radius:16px;padding:16px 18px;box-shadow:0 8px 24px rgba(90,40,80,.10);border-left:4px solid var(--berry);font-size:clamp(.95rem,1.4vw,1.08rem);line-height:1.5}
+.card.teal{border-left-color:var(--teal)} .card.amber{border-left-color:var(--amber)} .card.violet{border-left-color:var(--violet)}
+.card.question{background:linear-gradient(120deg,var(--plum-700),var(--plum-800));color:var(--cream);border-left-color:var(--gold);font-family:Georgia,serif;font-size:clamp(1rem,1.6vw,1.2rem)}
+.slide.dark .card{background:rgba(255,255,255,.07);color:var(--cream);box-shadow:none;border:1px solid rgba(255,255,255,.14);border-left:4px solid var(--gold)}
+.chips{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.chip{font-size:.85rem;font-weight:600;border-radius:999px;padding:7px 14px;background:rgba(255,255,255,.1);border:1px solid rgba(232,176,75,.45);color:var(--gold)}
+.illus{width:100%;max-width:560px;margin:0 auto;transition:transform .25s ease-out}
+.illus svg{width:100%;height:auto;display:block;max-height:66vh}
+[data-a]{opacity:0;transform:translateY(18px);transition:opacity .6s ease var(--d,0s),transform .6s ease var(--d,0s)}
+.slide.active [data-a]{opacity:1;transform:none}
+.shots{display:flex;gap:clamp(16px,3vw,40px);justify-content:center;flex-wrap:wrap;width:100%}
+.shot{position:relative;flex:0 1 300px;background:var(--paper);border-radius:22px;padding:12px;box-shadow:0 16px 40px rgba(60,25,70,.18)}
+.shot svg{width:100%;height:auto;display:block}
+.shot img.real{position:absolute;inset:12px;width:calc(100% - 24px);height:calc(100% - 40px);object-fit:cover;border-radius:14px;display:none}
+.shot.has-real img.real{display:block}
+.shot.has-real svg{visibility:hidden}
+.cap{font-size:.9rem;color:var(--ink-soft);text-align:center;margin-top:10px;line-height:1.4}
+.hint{font-size:.8rem;color:var(--ink-soft);opacity:.75;text-align:center;margin-top:14px}
+.price{font-size:clamp(2rem,4vw,3rem);font-weight:800;color:var(--berry);font-family:Georgia,serif}
+.bars{margin-top:18px;display:grid;gap:10px}
+.bar-row{display:grid;grid-template-columns:170px 1fr;gap:12px;align-items:center;font-size:.9rem}
+.bar{height:22px;border-radius:8px;position:relative;color:#fff;font-size:.78rem;font-weight:700;display:flex;align-items:center;padding:0 10px;white-space:nowrap}
+.bar.sub-bar{width:26%;background:linear-gradient(90deg,var(--berry),var(--magenta))}
+.bar.loss-bar{width:88%;background:linear-gradient(90deg,var(--amber),var(--danger))}
+.ed{border-bottom:1px dashed rgba(214,61,110,.6);cursor:text;padding:0 2px;border-radius:4px;outline:none}
+.ed:hover{background:rgba(214,61,110,.08)}
+.ed:focus{background:rgba(214,61,110,.12);border-bottom-style:solid}
+.slide.dark .ed{border-bottom-color:rgba(232,176,75,.7)}
+.btn{display:inline-block;background:linear-gradient(120deg,var(--berry),var(--violet));color:#fff;text-decoration:none;font-weight:700;
+  border-radius:999px;padding:14px 30px;font-size:1.05rem;box-shadow:0 10px 26px rgba(214,61,110,.4);transition:.2s;border:none;cursor:pointer}
+.btn:hover{transform:translateY(-2px);box-shadow:0 14px 32px rgba(214,61,110,.5)}
+.bottombar{position:fixed;bottom:0;left:0;right:0;z-index:70;display:flex;align-items:center;justify-content:center;gap:18px;padding:14px;
+  background:linear-gradient(transparent,rgba(36,20,50,.35))}
+.navbtn{width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.25);background:rgba(36,20,50,.6);color:var(--cream);font-size:1.1rem;cursor:pointer;transition:.2s;backdrop-filter:blur(6px)}
+.navbtn:hover{background:var(--berry);border-color:var(--berry)}
+.dots{display:flex;gap:8px}
+.dot{width:9px;height:9px;border-radius:999px;border:none;background:rgba(120,90,140,.45);cursor:pointer;transition:.25s;padding:0}
+.dot.on{width:26px;background:linear-gradient(90deg,var(--berry),var(--amber))}
+.toast{position:fixed;bottom:80px;left:50%;transform:translate(-50%,20px);z-index:90;background:var(--plum-800);color:var(--cream);
+  border:1px solid rgba(232,176,75,.5);border-radius:12px;padding:10px 18px;font-size:.9rem;opacity:0;pointer-events:none;transition:.35s;max-width:88vw;text-align:center}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.pulse{animation:pulse 3s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:.9}}
+.spin{animation:spin 40s linear infinite;transform-origin:center}
+@keyframes spin{to{transform:rotate(360deg)}}
+.dash{stroke-dasharray:6 8;animation:dash 1.6s linear infinite}
+@keyframes dash{to{stroke-dashoffset:-28}}
+.bob{animation:bob 4s ease-in-out infinite alternate}
+@keyframes bob{from{transform:translateY(0)}to{transform:translateY(-8px)}}
+.drop{animation:drop 3.2s ease-in infinite}
+@keyframes drop{0%{transform:translateY(-14px);opacity:0}25%{opacity:1}80%{opacity:1}100%{transform:translateY(46px);opacity:0}}
+@media (max-width:900px){
+  .inner{grid-template-columns:1fr;min-height:0;gap:26px}
+  .slide{padding:76px 6vw 120px}
+  .illus svg{max-height:44vh}
+  .bar-row{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  [data-a]{opacity:1;transform:none}
+}
+@media print{
+  body{overflow:visible;background:#fff}
+  .topbar,.bottombar,.progress,.toast,.grain,.orb,.hint{display:none!important}
+  .deck{height:auto;position:static}
+  .slide{position:static!important;opacity:1!important;visibility:visible!important;transform:none!important;overflow:visible!important;
+    height:auto;min-height:0;padding:26px 34px;page-break-after:always;display:block}
+  .inner{min-height:0;gap:24px}
+  [data-a]{opacity:1!important;transform:none!important}
+  .illus svg{max-height:340px}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+<div class="progress" id="progress"></div>
+<header class="topbar">
+  <div class="brand">✦ Салон<b>·</b>Бот <span style="opacity:.6;font-size:.8rem">презентация продукта</span></div>
+  <div class="topctl">
+    <span id="counter">1 / 8</span>
+    <button id="fsBtn" title="Полный экран (F)">⛶ Экран</button>
+    <button id="pdfBtn" title="Сохранить PDF (P)">🖨 PDF</button>
+  </div>
+</header>
+
+<main class="deck" id="deck">
+
+<!-- ═══ СЛАЙД 1 · ТИТУЛ ═══ -->
+<section class="slide dark">
+  <div class="orb o1"></div><div class="orb o2"></div>
+  <div class="inner">
+    <div>
+      <span class="kicker" data-a style="--d:.05s">Telegram-бот с AI-мозгом · для салонов красоты</span>
+      <h1 data-a style="--d:.15s">Умный администратор<br>для вашего салона</h1>
+      <p class="sub" data-a style="--d:.25s">Отвечает клиентам и ловит заявки 24/7 — пока вы работаете или спите. Клиент пишет своими словами, бот понимает и передаёт вам готовую заявку.</p>
+      <div class="chips" data-a style="--d:.35s">
+        <span class="chip">🕐 24/7</span><span class="chip">⚡ Ответ за секунды</span><span class="chip">📲 Клиенту ничего не нужно устанавливать</span>
+      </div>
+      <div class="card" data-a style="--d:.45s;margin-top:22px">
+        <b>Игорь</b> · <span class="ed" data-edit="phone" contenteditable="true">+7 (___) ___-__-__</span> · <span class="ed" data-edit="tg" contenteditable="true">@Zefirot</span>
+        <div style="font-size:.78rem;opacity:.6;margin-top:6px">✎ контакты можно редактировать прямо здесь — кликните и впишите свои</div>
+      </div>
+    </div>
+    <div class="illus" data-a style="--d:.3s">
+      <svg viewBox="0 0 520 520" role="img" aria-label="Телефон с AI-ботом салона">
+        <defs>
+          <radialGradient id="s1glow" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#F2A93B" stop-opacity=".5"/><stop offset="100%" stop-color="#F2A93B" stop-opacity="0"/></radialGradient>
+          <linearGradient id="s1ph" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3A2B45"/><stop offset="100%" stop-color="#241432"/></linearGradient>
+          <linearGradient id="s1b" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#D63D6E"/><stop offset="100%" stop-color="#7C4DFF"/></linearGradient>
+        </defs>
+        <circle cx="260" cy="260" r="215" fill="url(#s1glow)" class="pulse"/>
+        <circle cx="260" cy="260" r="188" fill="none" stroke="#E85D9E" stroke-opacity=".3" stroke-dasharray="3 12" class="spin"/>
+        <g transform="rotate(-6 260 260)">
+          <rect x="172" y="105" width="176" height="316" rx="28" fill="url(#s1ph)" stroke="#5A4670" stroke-width="2"/>
+          <rect x="184" y="121" width="152" height="284" rx="18" fill="#FFF8F3"/>
+          <rect x="232" y="112" width="56" height="8" rx="4" fill="#241432"/>
+          <circle cx="212" cy="150" r="13" fill="url(#s1b)"/>
+          <text x="212" y="155" text-anchor="middle" font-size="12" fill="#fff">✦</text>
+          <text x="232" y="147" font-size="11" font-weight="700" fill="#2B2135">Салон «Моя»</text>
+          <text x="232" y="160" font-size="8.5" fill="#159A8C">бот · онлайн</text>
+          <rect x="222" y="180" width="104" height="34" rx="12" fill="#D63D6E"/>
+          <text x="274" y="194" text-anchor="middle" font-size="9" fill="#fff">Маникюр в сб?</text>
+          <text x="274" y="206" text-anchor="middle" font-size="9" fill="#fff">💅</text>
+          <rect x="194" y="224" width="112" height="44" rx="12" fill="#fff" stroke="#EBD9E2"/>
+          <text x="250" y="241" text-anchor="middle" font-size="9" fill="#2B2135">Записал! Передал</text>
+          <text x="250" y="253" text-anchor="middle" font-size="9" fill="#2B2135">администратору 💫</text>
+          <rect x="238" y="278" width="88" height="26" rx="12" fill="#D63D6E"/>
+          <text x="282" y="295" text-anchor="middle" font-size="9" fill="#fff">+7 999 123-45-67</text>
+          <rect x="194" y="314" width="120" height="30" rx="12" fill="#fff" stroke="#EBD9E2"/>
+          <text x="254" y="333" text-anchor="middle" font-size="9" fill="#159A8C">✅ Заявка у владельца</text>
+          <rect x="196" y="368" width="128" height="24" rx="12" fill="#F3E8EF"/>
+          <text x="210" y="384" font-size="9" fill="#9b8aa6">Сообщение…</text>
+          <circle cx="312" cy="380" r="9" fill="url(#s1b)"/><text x="312" y="384" text-anchor="middle" font-size="9" fill="#fff">➤</text>
+        </g>
+        <g class="bob"><circle cx="110" cy="150" r="26" fill="#fff" opacity=".95"/><text x="110" y="158" text-anchor="middle" font-size="22">✂️</text></g>
+        <g class="bob" style="animation-delay:-1.5s"><circle cx="418" cy="180" r="26" fill="#fff" opacity=".95"/><text x="418" y="188" text-anchor="middle" font-size="22">💅</text></g>
+        <g class="bob" style="animation-delay:-2.6s"><circle cx="120" cy="360" r="24" fill="#fff" opacity=".95"/><text x="120" y="368" text-anchor="middle" font-size="20">🌙</text></g>
+        <g class="bob" style="animation-delay:-.8s"><circle cx="408" cy="370" r="24" fill="#fff" opacity=".95"/><text x="408" y="378" text-anchor="middle" font-size="20">🔥</text></g>
+        <path d="M90 250 l6 14 14 6 -14 6 -6 14 -6 -14 -14 -6 14 -6z" fill="#E8B04B" class="pulse"/>
+        <path d="M440 270 l5 11 11 5 -11 5 -5 11 -5 -11 -11 -5 11 -5z" fill="#E85D9E" class="pulse" style="animation-delay:-1.4s"/>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ СЛАЙД 2 · ПРОБЛЕМА ═══ -->
+<section class="slide light">
+  <div class="orb o1"></div><div class="orb o2"></div>
+  <div class="inner">
+    <div>
+      <span class="kicker" data-a style="--d:.05s">01 · Проблема</span>
+      <h2 data-a style="--d:.12s">Где теряются клиенты 💸</h2>
+      <div class="cards">
+        <div class="card" data-a style="--d:.2s">🌙 <b>Ночь.</b> Клиент пишет в 23:47 — администратор спит. Утром клиент уже записан в другом месте.</div>
+        <div class="card amber" data-a style="--d:.3s">⏳ <b>Час пик.</b> Сообщения ждут ответа часами, пока администратор занят клиентами в зале. Клиент уходит к конкуренту.</div>
+        <div class="card violet" data-a style="--d:.4s">📉 <b>Каждый пропуск — деньги.</b> Одно неотвеченное сообщение — несостоявшийся визит на 2 500–7 900₽.</div>
+        <div class="card question" data-a style="--d:.5s">Сколько таких сообщений было у вашего салона на этой неделе?</div>
+      </div>
+    </div>
+    <div class="illus" data-a style="--d:.3s">
+      <svg viewBox="0 0 520 430" role="img" aria-label="Воронка, из которой утекают клиенты">
+        <defs><linearGradient id="s2f" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fff"/><stop offset="100%" stop-color="#FFE9EF"/></linearGradient></defs>
+        <text x="260" y="34" text-anchor="middle" font-size="14" font-weight="700" fill="#2B2135">Сообщения клиентов</text>
+        <g class="bob"><rect x="150" y="48" width="52" height="30" rx="12" fill="#D63D6E"/><text x="176" y="68" text-anchor="middle" font-size="14" fill="#fff">💬</text></g>
+        <g class="bob" style="animation-delay:-1s"><rect x="234" y="44" width="52" height="30" rx="12" fill="#7C4DFF"/><text x="260" y="64" text-anchor="middle" font-size="14" fill="#fff">💬</text></g>
+        <g class="bob" style="animation-delay:-2s"><rect x="318" y="48" width="52" height="30" rx="12" fill="#E85D9E"/><text x="344" y="68" text-anchor="middle" font-size="14" fill="#fff">💬</text></g>
+        <path d="M100 92 H420 L302 250 V318 H218 V250 Z" fill="url(#s2f)" stroke="#EBD9E2" stroke-width="2"/>
+        <circle cx="240" cy="150" r="10" fill="#2EC4B6" opacity=".85"/>
+        <circle cx="278" cy="185" r="10" fill="#2EC4B6" opacity=".7"/>
+        <circle cx="258" cy="230" r="10" fill="#2EC4B6" opacity=".9"/>
+        <path d="M150 190 C120 240 100 280 92 330" fill="none" stroke="#E0455E" stroke-width="2" stroke-dasharray="4 6"/>
+        <path d="M372 185 C404 235 424 280 432 330" fill="none" stroke="#E0455E" stroke-width="2" stroke-dasharray="4 6"/>
+        <g class="drop"><circle cx="96" cy="300" r="17" fill="#F2A93B" stroke="#B02458" stroke-width="2"/><text x="96" y="306" text-anchor="middle" font-size="14" font-weight="700" fill="#7a3b12">₽</text></g>
+        <g class="drop" style="animation-delay:-1.6s"><circle cx="428" cy="300" r="17" fill="#F2A93B" stroke="#B02458" stroke-width="2"/><text x="428" y="306" text-anchor="middle" font-size="14" font-weight="700" fill="#7a3b12">₽</text></g>
+        <text x="86" y="368" text-anchor="middle" font-size="11" fill="#E0455E" font-weight="700">ушёл к конкуренту</text>
+        <text x="436" y="368" text-anchor="middle" font-size="11" fill="#E0455E" font-weight="700">не дождался ответа</text>
+        <rect x="204" y="330" width="112" height="34" rx="12" fill="#2EC4B6"/>
+        <text x="260" y="352" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">Записи ✅</text>
+        <g><circle cx="452" cy="60" r="20" fill="#2E1B40"/><text x="452" y="67" text-anchor="middle" font-size="16">🌙</text><text x="452" y="96" text-anchor="middle" font-size="10" fill="#6E5F7C">23:47</text></g>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ СЛАЙД 3 · РЕШЕНИЕ ═══ -->
+<section class="slide cool">
+  <div class="orb o2"></div><div class="orb o3"></div>
+  <div class="inner">
+    <div>
+      <span class="kicker" data-a style="--d:.05s">02 · Решение</span>
+      <h2 data-a style="--d:.12s">AI-администратор в Telegram 🤖</h2>
+      <div class="cards">
+        <div class="card teal" data-a style="--d:.2s">💬 <b>Отвечает мгновенно:</b> цены, мастера, парковка, Wi-Fi, оплата — всё из карточки вашего салона.</div>
+        <div class="card" data-a style="--d:.3s">📥 <b>Ловит заявку:</b> услуга, желаемое время и телефон — даже ночью и в выходные.</div>
+        <div class="card amber" data-a style="--d:.4s">🔥 <b>Присылает вам заявку</b> с кнопками в одно касание: подтверждена · выполнена · отмена · неявка.</div>
+        <div class="card violet" data-a style="--d:.5s">🗂 <b>Хранит всё в базе:</b> список заявок по команде /leads — ничего не теряется.</div>
+      </div>
+    </div>
+    <div class="illus" data-a style="--d:.3s">
+      <svg viewBox="0 0 560 320" role="img" aria-label="Схема: клиент — бот — владелец">
+        <defs><linearGradient id="s3b" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#D63D6E"/><stop offset="100%" stop-color="#7C4DFF"/></linearGradient></defs>
+        <path d="M128 150 C170 150 180 150 222 150" fill="none" stroke="#D63D6E" stroke-width="3" class="dash"/>
+        <path d="M338 150 C380 150 390 150 432 150" fill="none" stroke="#7C4DFF" stroke-width="3" class="dash"/>
+        <circle cx="80" cy="150" r="48" fill="#fff" stroke="#D63D6E" stroke-width="3"/>
+        <text x="80" y="160" text-anchor="middle" font-size="30">💬</text>
+        <text x="80" y="228" text-anchor="middle" font-size="13" font-weight="700" fill="#2B2135">Клиент пишет</text>
+        <text x="80" y="246" text-anchor="middle" font-size="11" fill="#6E5F7C">своими словами</text>
+        <circle cx="280" cy="150" r="62" fill="url(#s3b)" class="pulse"/>
+        <circle cx="280" cy="150" r="56" fill="url(#s3b)"/>
+        <text x="280" y="165" text-anchor="middle" font-size="38" fill="#fff">✦</text>
+        <rect x="252" y="66" width="56" height="24" rx="12" fill="#F2A93B"/>
+        <text x="280" y="82" text-anchor="middle" font-size="12" font-weight="800" fill="#fff">24/7</text>
+        <text x="280" y="240" text-anchor="middle" font-size="13" font-weight="700" fill="#2B2135">Бот понимает</text>
+        <text x="280" y="258" text-anchor="middle" font-size="11" fill="#6E5F7C">и ловит заявку</text>
+        <circle cx="480" cy="150" r="48" fill="#fff" stroke="#7C4DFF" stroke-width="3"/>
+        <text x="480" y="160" text-anchor="middle" font-size="30">🔥</text>
+        <text x="480" y="228" text-anchor="middle" font-size="13" font-weight="700" fill="#2B2135">Владельцу</text>
+        <text x="480" y="246" text-anchor="middle" font-size="11" fill="#6E5F7C">мгновенно, в личку</text>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ СЛАЙД 4 · ВЖИВУЮ ═══ -->
+<section class="slide light">
+  <div class="orb o1"></div>
+  <div class="inner center">
+    <div style="width:100%">
+      <span class="kicker" data-a style="--d:.05s">03 · Вживую</span>
+      <h2 data-a style="--d:.12s">Как это выглядит в жизни 📱</h2>
+      <div class="shots">
+        <div class="shot" data-a style="--d:.25s">
+          <img class="real" src="shot_dialog.png" alt="" onload="this.parentElement.classList.add('has-real')" onerror="this.remove()">
+          <svg viewBox="0 0 300 560" role="img" aria-label="Диалог клиента с ботом">
+            <rect x="8" y="8" width="284" height="544" rx="36" fill="#2E1B40"/>
+            <rect x="20" y="20" width="260" height="520" rx="26" fill="#F6EDF3"/>
+            <rect x="20" y="20" width="260" height="54" rx="26" fill="#fff"/>
+            <rect x="20" y="48" width="260" height="26" fill="#fff"/>
+            <circle cx="46" cy="47" r="14" fill="#D63D6E"/><text x="46" y="52" text-anchor="middle" font-size="12" fill="#fff">✦</text>
+            <text x="68" y="44" font-size="12" font-weight="700" fill="#2B2135">Салон «Моя»</text>
+            <text x="68" y="58" font-size="9" fill="#159A8C">бот · онлайн</text>
+            <rect x="128" y="82" width="44" height="16" rx="8" fill="#E7D8E2"/><text x="150" y="93" text-anchor="middle" font-size="8.5" fill="#6E5F7C">23:47</text>
+            <rect x="92" y="106" width="176" height="58" rx="14" fill="#D63D6E"/>
+            <text x="104" y="124" font-size="10" fill="#fff">Хочу к Екатерине на маникюр</text>
+            <text x="104" y="138" font-size="10" fill="#fff">в субботу после обеда.</text>
+            <text x="104" y="152" font-size="10" fill="#fff">Можно с ребёнком?</text>
+            <rect x="32" y="176" width="204" height="76" rx="14" fill="#fff" stroke="#EBD9E2"/>
+            <text x="44" y="194" font-size="10" fill="#2B2135">Здравствуйте! С ребёнком можно —</text>
+            <text x="44" y="208" font-size="10" fill="#2B2135">есть диван для гостей 😊</text>
+            <text x="44" y="222" font-size="10" fill="#2B2135">Оставьте телефон — передам</text>
+            <text x="44" y="236" font-size="10" fill="#2B2135">заявку администратору.</text>
+            <rect x="150" y="264" width="118" height="30" rx="14" fill="#D63D6E"/>
+            <text x="209" y="283" text-anchor="middle" font-size="10" fill="#fff">+7 999 123-45-67</text>
+            <rect x="32" y="306" width="206" height="58" rx="14" fill="#fff" stroke="#EBD9E2"/>
+            <text x="44" y="324" font-size="10" fill="#2B2135">Спасибо! Передал заявку 💫</text>
+            <text x="44" y="338" font-size="10" fill="#2B2135">Администратор подтвердит</text>
+            <text x="44" y="352" font-size="10" fill="#2B2135">время в ближайшее время.</text>
+            <rect x="32" y="498" width="200" height="28" rx="14" fill="#fff"/>
+            <text x="46" y="516" font-size="9.5" fill="#9b8aa6">Сообщение…</text>
+            <circle cx="252" cy="512" r="13" fill="#D63D6E"/><text x="252" y="517" text-anchor="middle" font-size="11" fill="#fff">➤</text>
+          </svg>
+          <div class="cap">Клиент пишет своими словами — бот понимает и ловит заявку</div>
+        </div>
+        <div class="shot" data-a style="--d:.4s">
+          <img class="real" src="shot_lead.png" alt="" onload="this.parentElement.classList.add('has-real')" onerror="this.remove()">
+          <svg viewBox="0 0 300 560" role="img" aria-label="Заявка у владельца со статус-кнопками">
+            <rect x="8" y="8" width="284" height="544" rx="36" fill="#2E1B40"/>
+            <rect x="20" y="20" width="260" height="520" rx="26" fill="#F6EDF3"/>
+            <rect x="20" y="20" width="260" height="54" rx="26" fill="#fff"/>
+            <rect x="20" y="48" width="260" height="26" fill="#fff"/>
+            <text x="36" y="52" font-size="12" font-weight="700" fill="#2B2135">🔥 Заявки салона</text>
+            <rect x="32" y="88" width="236" height="196" rx="16" fill="#fff" stroke="#EBD9E2"/>
+            <text x="44" y="110" font-size="12" font-weight="800" fill="#D63D6E">🔥 Новая заявка!</text>
+            <text x="44" y="130" font-size="10" fill="#2B2135">📋 Маникюр + гель-лак, Екатерина,</text>
+            <text x="44" y="144" font-size="10" fill="#2B2135">суббота после обеда</text>
+            <text x="44" y="160" font-size="10" fill="#2B2135">📞 +7 999 123-45-67</text>
+            <text x="44" y="176" font-size="10" fill="#2B2135">👤 Veronika</text>
+            <rect x="44" y="188" width="104" height="24" rx="10" fill="#E9F9F6" stroke="#2EC4B6"/><text x="96" y="204" text-anchor="middle" font-size="8.5" fill="#159A8C">✅ Подтверждена</text>
+            <rect x="154" y="188" width="102" height="24" rx="10" fill="#FFF6E8" stroke="#F2A93B"/><text x="205" y="204" text-anchor="middle" font-size="8.5" fill="#B0700F">💰 Выполнена</text>
+            <rect x="44" y="218" width="104" height="24" rx="10" fill="#FDECEF" stroke="#E0455E"/><text x="96" y="234" text-anchor="middle" font-size="8.5" fill="#E0455E">❌ Отмена</text>
+            <rect x="154" y="218" width="102" height="24" rx="10" fill="#F1ECFB" stroke="#7C4DFF"/><text x="205" y="234" text-anchor="middle" font-size="8.5" fill="#7C4DFF">👻 Неявка</text>
+            <text x="44" y="266" font-size="10" font-weight="700" fill="#159A8C">— Статус: ✅ подтверждена</text>
+            <rect x="32" y="300" width="236" height="128" rx="16" fill="#fff" stroke="#EBD9E2"/>
+            <text x="44" y="322" font-size="11" font-weight="800" fill="#2B2135">📥 /leads</text>
+            <text x="44" y="342" font-size="9.5" fill="#2B2135">#12 09.11 20:10 · Veronika</text>
+            <text x="44" y="356" font-size="9.5" fill="#159A8C">✅ подтверждена · маникюр</text>
+            <text x="44" y="376" font-size="9.5" fill="#2B2135">#11 08.11 22:41 · Анна</text>
+            <text x="44" y="390" font-size="9.5" fill="#B0700F">💰 выполнена · стрижка</text>
+            <text x="44" y="410" font-size="9.5" fill="#2B2135">#10 08.11 19:03 · Мария</text>
+            <text x="44" y="424" font-size="9.5" fill="#E0455E">❌ отменена · окрашивание</text>
+          </svg>
+          <div class="cap">Заявка владельцу — статус меняется одной кнопкой</div>
+        </div>
+      </div>
+      <p class="hint">Хотите живые скриншоты вместо макетов? Положите файлы shot_dialog.png и shot_lead.png рядом с этим файлом — они подставятся автоматически.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ СЛАЙД 5 · ДОВЕРИЕ ═══ -->
+<section class="slide cool">
+  <div class="orb o2"></div><div class="orb o3"></div>
+  <div class="inner">
+    <div>
+      <span class="kicker" data-a style="--d:.05s">04 · Доверие</span>
+      <h2 data-a style="--d:.12s">Бот не обманывает ваших клиентов 🤝</h2>
+      <div class="cards">
+        <div class="card" data-a style="--d:.2s">🚫 <b>Не выдумывает</b> скидки и акции — отвечает только по вашей карточке.</div>
+        <div class="card amber" data-a style="--d:.3s">🕐 <b>Не обещает</b> несуществующие свободные окна — время подтверждает администратор.</div>
+        <div class="card violet" data-a style="--d:.4s">⚠️ <b>Честен про услуги:</b> если услуги нет в прайсе — скажет прямо и предложит альтернативы.</div>
+        <div class="card teal" data-a style="--d:.5s">📞 <b>Не знает ответа?</b> Передаст администратору и сохранит контакт клиента — лид не теряется.</div>
+      </div>
+      <div class="card question" data-a style="--d:.6s;margin-top:12px">Репутация салона под защитой: бот никогда не обещает больше, чем салон может выполнить.</div>
+    </div>
+    <div class="illus" data-a style="--d:.3s">
+      <svg viewBox="0 0 520 400" role="img" aria-label="Щит честности и пример ответа на каверзный вопрос">
+        <defs><linearGradient id="s5s" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2EC4B6"/><stop offset="100%" stop-color="#159A8C"/></linearGradient></defs>
+        <path d="M150 52 L240 84 V168 C240 240 196 288 150 304 C104 288 60 240 60 168 V84 Z" fill="url(#s5s)" class="pulse"/>
+        <path d="M150 52 L240 84 V168 C240 240 196 288 150 304 C104 288 60 240 60 168 V84 Z" fill="url(#s5s)"/>
+        <path d="M112 168 l26 28 52 -60" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+        <g class="bob"><circle cx="60" cy="60" r="20" fill="#fff" stroke="#EBD9E2"/><text x="60" y="67" text-anchor="middle" font-size="16">🚫</text></g>
+        <g class="bob" style="animation-delay:-1s"><circle cx="244" cy="52" r="20" fill="#fff" stroke="#EBD9E2"/><text x="244" y="59" text-anchor="middle" font-size="16">🕐</text></g>
+        <g class="bob" style="animation-delay:-2s"><circle cx="52" cy="250" r="20" fill="#fff" stroke="#EBD9E2"/><text x="52" y="257" text-anchor="middle" font-size="16">⚠️</text></g>
+        <g class="bob" style="animation-delay:-.6s"><circle cx="248" cy="256" r="20" fill="#fff" stroke="#EBD9E2"/><text x="248" y="263" text-anchor="middle" font-size="16">📞</text></g>
+        <rect x="292" y="92" width="212" height="52" rx="14" fill="#D63D6E"/>
+        <text x="306" y="112" font-size="10.5" fill="#fff">Скидка 50%, если приду</text>
+        <text x="306" y="128" font-size="10.5" fill="#fff">в 3 ночи? 🌙</text>
+        <rect x="292" y="160" width="212" height="80" rx="14" fill="#fff" stroke="#EBD9E2"/>
+        <text x="306" y="180" font-size="10.5" fill="#2B2135">К сожалению, скидку предложить</text>
+        <text x="306" y="196" font-size="10.5" fill="#2B2135">не могу. Наш салон работает</text>
+        <text x="306" y="212" font-size="10.5" fill="#2B2135">ежедневно с 10:00 до 22:00 🙂</text>
+        <text x="398" y="272" text-anchor="middle" font-size="11" fill="#6E5F7C" font-style="italic">реальный ответ бота на каверзный вопрос</text>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ СЛАЙД 6 · РАЗВИТИЕ ═══ -->
+<section class="slide light">
+  <div class="orb o1"></div><div class="orb o3"></div>
+  <div class="inner">
+    <div>
+      <span class="kicker" data-a style="--d:.05s">05 · Развитие</span>
+      <h2 data-a style="--d:.12s">Не заменяет — усиливает 🧩</h2>
+      <div class="cards">
+        <div class="card violet" data-a style="--d:.2s">✅ <b>Работает рядом с DIKIDI и CRM</b> — ваш журнал остаётся там, где был, ничего не нужно переучивать.</div>
+        <div class="card" data-a style="--d:.3s">📅 <b>Скоро: интеграция с DIKIDI</b> — реальные свободные слоты и мгновенная запись прямо из чата.</div>
+        <div class="card teal" data-a style="--d:.4s">♻️ <b>Лист ожидания:</b> отменённый слот сам предлагается тем, кто хотел это время.</div>
+        <div class="card amber" data-a style="--d:.5s">📊 <b>Аналитика отмен и неявок:</b> видно, где салон теряет деньги.</div>
+      </div>
+    </div>
+    <div class="illus" data-a style="--d:.3s">
+      <svg viewBox="0 0 560 340" role="img" aria-label="Бот и CRM работают вместе, план развития">
+        <defs><linearGradient id="s6b" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#D63D6E"/><stop offset="100%" stop-color="#E85D9E"/></linearGradient></defs>
+        <rect x="20" y="36" width="220" height="112" rx="18" fill="#fff" stroke="#7C4DFF" stroke-width="2.5"/>
+        <text x="40" y="72" font-size="24">📅</text>
+        <text x="76" y="72" font-size="15" font-weight="800" fill="#2B2135">DIKIDI / CRM</text>
+        <text x="40" y="100" font-size="11.5" fill="#6E5F7C">журнал записей,</text>
+        <text x="40" y="118" font-size="11.5" fill="#6E5F7C">клиентская база</text>
+        <rect x="320" y="36" width="220" height="112" rx="18" fill="url(#s6b)"/>
+        <text x="340" y="72" font-size="24">✦</text>
+        <text x="376" y="72" font-size="15" font-weight="800" fill="#fff">AI-бот</text>
+        <text x="340" y="100" font-size="11.5" fill="#FFE9EF">общение с клиентами</text>
+        <text x="340" y="118" font-size="11.5" fill="#FFE9EF">и поимка заявок 24/7</text>
+        <path d="M246 82 H314" stroke="#7C4DFF" stroke-width="3" class="dash"/>
+        <path d="M314 106 H246" stroke="#D63D6E" stroke-width="3" class="dash"/>
+        <text x="280" y="66" text-anchor="middle" font-size="10" fill="#6E5F7C">скоро:</text>
+        <text x="280" y="132" text-anchor="middle" font-size="10" fill="#6E5F7C">слоты и записи</text>
+        <path d="M60 250 H500" stroke="#EBD9E2" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="95" cy="250" r="22" fill="#7C4DFF" class="pulse"/><circle cx="95" cy="250" r="22" fill="#7C4DFF"/>
+        <text x="95" y="256" text-anchor="middle" font-size="14" font-weight="800" fill="#fff">1</text>
+        <text x="95" y="292" text-anchor="middle" font-size="11.5" font-weight="700" fill="#2B2135">Слоты DIKIDI</text>
+        <circle cx="280" cy="250" r="22" fill="#F2A93B"/>
+        <text x="280" y="256" text-anchor="middle" font-size="14" font-weight="800" fill="#fff">2</text>
+        <text x="280" y="292" text-anchor="middle" font-size="11.5" font-weight="700" fill="#2B2135">Лист ожидания</text>
+        <circle cx="465" cy="250" r="22" fill="#2EC4B6"/>
+        <text x="465" y="256" text-anchor="middle" font-size="14" font-weight="800" fill="#fff">3</text>
+        <text x="465" y="292" text-anchor="middle" font-size="11.5" font-weight="700" fill="#2B2135">Аналитика отмен</text>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ СЛАЙД 7 · УСЛОВИЯ ═══ -->
+<section class="slide cool">
+  <div class="orb o2"></div><div class="orb o1"></div>
+  <div class="inner">
+    <div>
+      <span class="kicker" data-a style="--d:.05s">06 · Условия</span>
+      <h2 data-a style="--d:.12s">Попробуйте на своём салоне бесплатно 🎁</h2>
+      <div class="cards">
+        <div class="card teal" data-a style="--d:.2s">🚀 <b>10 дней полного функционала:</b> настроим бота, заполним карточку салона, дадим QR-код на ресепшен и картинку для соцсетей.</div>
+        <div class="card" data-a style="--d:.3s">🛠 <b>Всё включено:</b> хостинг, обновления, поддержка. Вам не нужно ничего устанавливать.</div>
+        <div class="card amber" data-a style="--d:.4s">📄 <b>Без риска:</b> без годовых договоров и платы за внедрение. Не понравится — просто отключим.</div>
+      </div>
+      <div class="card" data-a style="--d:.5s;margin-top:14px">
+        Далее — <span class="price">1 500₽/мес</span>
+        <div class="bars">
+          <div class="bar-row"><span>Подписка</span><div class="bar sub-bar">1 500₽</div></div>
+          <div class="bar-row"><span>Один упущенный визит</span><div class="bar loss-bar">2 500–7 900₽</div></div>
+        </div>
+        <div style="font-size:.85rem;color:var(--ink-soft);margin-top:8px">Дешевле, чем один потерянный клиент.</div>
+      </div>
+    </div>
+    <div class="illus" data-a style="--d:.3s">
+      <svg viewBox="0 0 520 380" role="img" aria-label="Подарок: 10 дней бесплатно и ценник подписки">
+        <defs>
+          <linearGradient id="s7g" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#E85D9E"/><stop offset="100%" stop-color="#B02458"/></linearGradient>
+          <linearGradient id="s7t" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3A2B45"/><stop offset="100%" stop-color="#241432"/></linearGradient>
+        </defs>
+        <g class="bob">
+          <rect x="120" y="60" width="150" height="34" rx="17" fill="#F2A93B"/>
+          <text x="195" y="82" text-anchor="middle" font-size="14" font-weight="800" fill="#fff">10 дней бесплатно</text>
+          <path d="M195 94 V120" stroke="#F2A93B" stroke-width="2" stroke-dasharray="3 4"/>
+        </g>
+        <rect x="70" y="150" width="180" height="130" rx="16" fill="url(#s7g)"/>
+        <rect x="58" y="120" width="204" height="42" rx="12" fill="#B02458"/>
+        <rect x="148" y="120" width="24" height="160" fill="#E8B04B"/>
+        <circle cx="146" cy="112" r="16" fill="none" stroke="#E8B04B" stroke-width="7"/>
+        <circle cx="176" cy="112" r="16" fill="none" stroke="#E8B04B" stroke-width="7"/>
+        <path d="M330 130 h130 a14 14 0 0 1 14 14 v120 a14 14 0 0 1 -14 14 h-130 l-36 -74 z" fill="url(#s7t)"/>
+        <circle cx="322" cy="204" r="9" fill="#FFF8F3"/>
+        <text x="392" y="196" text-anchor="middle" font-size="30" font-weight="800" fill="#FFF8F3" font-family="Georgia,serif">1 500₽</text>
+        <text x="392" y="222" text-anchor="middle" font-size="13" fill="#E8B04B">в месяц · всё включено</text>
+        <path d="M90 320 l5 11 11 5 -11 5 -5 11 -5 -11 -11 -5 11 -5z" fill="#E8B04B" class="pulse"/>
+        <path d="M470 90 l5 11 11 5 -11 5 -5 11 -5 -11 -11 -5 11 -5z" fill="#E85D9E" class="pulse" style="animation-delay:-1.2s"/>
+        <path d="M280 330 l4 9 9 4 -9 4 -4 9 -4 -9 -9 -4 9 -4z" fill="#2EC4B6" class="pulse" style="animation-delay:-2s"/>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ СЛАЙД 8 · ДЕМО ═══ -->
+<section class="slide dark">
+  <div class="orb o1"></div><div class="orb o2"></div>
+  <div class="inner">
+    <div>
+      <span class="kicker" data-a style="--d:.05s">Демо</span>
+      <h1 data-a style="--d:.15s">Посмотрите вживую<br>прямо сейчас ✨</h1>
+      <p class="sub" data-a style="--d:.25s">Возьмите телефон и напишите боту любой вопрос — как клиент: цену, запись, каверзный вопрос про скидку в 3 ночи. Заявка прилетит владельцу за секунды.</p>
+      <div data-a style="--d:.35s">
+        <a class="btn" id="botLink" href="https://t.me/my_salon_test_igor_bot" target="_blank" rel="noopener">Открыть бота в Telegram ➤</a>
+      </div>
+      <div class="card" data-a style="--d:.45s;margin-top:22px">
+        Бот: <span class="ed" data-edit="bot" contenteditable="true">@my_salon_test_igor_bot</span><br>
+        <b>Игорь</b> · <span class="ed" data-edit="phone" contenteditable="true">+7 (___) ___-__-__</span> · <span class="ed" data-edit="tg" contenteditable="true">@Zefirot</span>
+        <div style="font-size:.78rem;opacity:.6;margin-top:6px">✎ имя бота и контакты редактируются кликом — кнопка выше обновится сама</div>
+      </div>
+    </div>
+    <div class="illus" data-a style="--d:.3s">
+      <svg viewBox="0 0 460 460" role="img" aria-label="Телефон с кнопкой написать боту">
+        <defs>
+          <radialGradient id="s8glow" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#D63D6E" stop-opacity=".55"/><stop offset="100%" stop-color="#D63D6E" stop-opacity="0"/></radialGradient>
+          <linearGradient id="s8b" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#D63D6E"/><stop offset="100%" stop-color="#7C4DFF"/></linearGradient>
+        </defs>
+        <circle cx="230" cy="230" r="200" fill="url(#s8glow)" class="pulse"/>
+        <circle cx="230" cy="230" r="170" fill="none" stroke="#E8B04B" stroke-opacity=".35" stroke-dasharray="3 12" class="spin"/>
+        <g class="bob">
+          <rect x="150" y="76" width="160" height="308" rx="26" fill="#3A2B45" stroke="#5A4670" stroke-width="2"/>
+          <rect x="162" y="92" width="136" height="276" rx="18" fill="#FFF8F3"/>
+          <circle cx="230" cy="160" r="34" fill="url(#s8b)"/>
+          <text x="230" y="172" text-anchor="middle" font-size="28" fill="#fff">✦</text>
+          <text x="230" y="216" text-anchor="middle" font-size="13" font-weight="800" fill="#2B2135">Салон «Моя»</text>
+          <text x="230" y="234" text-anchor="middle" font-size="10" fill="#159A8C">онлайн 24/7</text>
+          <rect x="176" y="256" width="108" height="32" rx="16" fill="url(#s8b)"/>
+          <text x="230" y="277" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">Написать ➤</text>
+          <rect x="176" y="300" width="108" height="22" rx="11" fill="#F3E8EF"/>
+          <text x="230" y="315" text-anchor="middle" font-size="9" fill="#9b8aa6">цены · запись · вопросы</text>
+        </g>
+        <path d="M84 140 l6 13 13 6 -13 6 -6 13 -6 -13 -13 -6 13 -6z" fill="#E8B04B" class="pulse"/>
+        <path d="M382 180 l5 11 11 5 -11 5 -5 11 -5 -11 -11 -5 11 -5z" fill="#E85D9E" class="pulse" style="animation-delay:-1.3s"/>
+        <path d="M100 330 l4 9 9 4 -9 4 -4 9 -4 -9 -9 -4 9 -4z" fill="#2EC4B6" class="pulse" style="animation-delay:-2.2s"/>
+        <path d="M370 330 l5 11 11 5 -11 5 -5 11 -5 -11 -11 -5 11 -5z" fill="#E8B04B" class="pulse" style="animation-delay:-.7s"/>
+      </svg>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="bottombar">
+  <button class="navbtn" id="prevBtn" aria-label="Предыдущий слайд">←</button>
+  <div class="dots" id="dots"></div>
+  <button class="navbtn" id="nextBtn" aria-label="Следующий слайд">→</button>
+</footer>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  var slides=[].slice.call(document.querySelectorAll('.slide'));
+  var dotsBox=document.getElementById('dots'),counter=document.getElementById('counter'),progress=document.getElementById('progress');
+  var toastEl=document.getElementById('toast'),toastTimer=null,i=0;
+  slides.forEach(function(_,k){
+    var d=document.createElement('button');d.className='dot';d.setAttribute('aria-label','Слайд '+(k+1));
+    d.addEventListener('click',function(){go(k)});dotsBox.appendChild(d);
+  });
+  var dots=[].slice.call(dotsBox.children);
+  function go(n){
+    i=Math.max(0,Math.min(slides.length-1,n));
+    slides.forEach(function(s,k){s.classList.toggle('active',k===i)});
+    dots.forEach(function(d,k){d.classList.toggle('on',k===i)});
+    counter.textContent=(i+1)+' / '+slides.length;
+    progress.style.width=((i+1)/slides.length*100)+'%';
+    slides[i].scrollTop=0;
+  }
+  function toast(msg){
+    toastEl.textContent=msg;toastEl.classList.add('show');
+    clearTimeout(toastTimer);toastTimer=setTimeout(function(){toastEl.classList.remove('show')},3200);
+  }
+  document.getElementById('prevBtn').addEventListener('click',function(){go(i-1)});
+  document.getElementById('nextBtn').addEventListener('click',function(){go(i+1)});
+  document.addEventListener('keydown',function(e){
+    if(e.target&&e.target.isContentEditable){if(e.key==='Escape')e.target.blur();return;}
+    if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){e.preventDefault();go(i+1)}
+    else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();go(i-1)}
+    else if(e.key==='Home'){e.preventDefault();go(0)}
+    else if(e.key==='End'){e.preventDefault();go(slides.length-1)}
+    else if(e.key==='f'||e.key==='F'||e.key==='а'||e.key==='А'){toggleFs()}
+    else if(e.key==='p'||e.key==='P'||e.key==='з'||e.key==='З'){doPrint()}
+  });
+  var tx=0,ty=0;
+  document.getElementById('deck').addEventListener('touchstart',function(e){tx=e.touches[0].clientX;ty=e.touches[0].clientY},{passive:true});
+  document.getElementById('deck').addEventListener('touchend',function(e){
+    if(e.target&&e.target.isContentEditable)return;
+    var dx=e.changedTouches[0].clientX-tx,dy=e.changedTouches[0].clientY-ty;
+    if(Math.abs(dx)>60&&Math.abs(dy)<80)go(i+(dx<0?1:-1));
+  },{passive:true});
+  function toggleFs(){
+    if(document.fullscreenElement){document.exitFullscreen&&document.exitFullscreen()}
+    else if(document.documentElement.requestFullscreen){document.documentElement.requestFullscreen().catch(function(){toast('Полный экран недоступен в этом браузере')})}
+    else toast('Полный экран недоступен в этом браузере');
+  }
+  document.getElementById('fsBtn').addEventListener('click',toggleFs);
+  function doPrint(){toast('В окне печати включите «Фоновая графика» — и сохраните как PDF');setTimeout(function(){window.print()},900)}
+  document.getElementById('pdfBtn').addEventListener('click',doPrint);
+  document.addEventListener('pointermove',function(e){
+    var mx=(e.clientX/window.innerWidth-.5),my=(e.clientY/window.innerHeight-.5);
+    slides[i].querySelectorAll('.illus').forEach(function(el){el.style.transform='translate('+(mx*10)+'px,'+(my*8)+'px)'});
+  });
+  var botLink=document.getElementById('botLink');
+  function syncBot(){
+    var el=document.querySelector('[data-edit="bot"]');if(!el)return;
+    var u=el.textContent.trim().replace(/^@/,'').replace(/\s+/g,'');
+    if(u)botLink.href='https://t.me/'+u;
+  }
+  [].slice.call(document.querySelectorAll('[data-edit]')).forEach(function(el){
+    var key='sb_'+el.getAttribute('data-edit');
+    try{var saved=localStorage.getItem(key);if(saved!==null)el.textContent=saved}catch(e){}
+    el.addEventListener('input',function(){
+      try{localStorage.setItem(key,el.textContent)}catch(e){}
+      if(el.getAttribute('data-edit')==='bot')syncBot();
+    });
+    el.addEventListener('blur',function(){toast('Сохранено ✓')});
+  });
+  syncBot();go(0);
+  try{
+    if(!localStorage.getItem('sb_hint')){
+      setTimeout(function(){toast('✎ Контакты и имя бота редактируются кликом прямо в слайдах');localStorage.setItem('sb_hint','1')},1400);
+    }
+  }catch(e){}
+})();
+</script>
+</body>
+</html>
