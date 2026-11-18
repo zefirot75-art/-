@@ -3,6 +3,7 @@ import re
 import logging
 import requests
 import psycopg2
+from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ChatAction
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
@@ -16,6 +17,15 @@ OWNER_CHAT_ID = os.environ.get("OWNER_CHAT_ID")
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 PHONE_REGEX = re.compile(r'(\+7|8)[\s\-\(]*\d{3}[\s\-\)]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2}')
+
+# Таблица соответствия услуг → service_id в DIKIDI
+DIKIDI_COMPANY_ID = "2207697"
+SERVICE_MAPPING = {
+    "стрижка": "24052063",
+    "подстричься": "24052063",
+    "постричься": "24052063",
+    "стрижки": "24052063",
+}
 
 STATUS_LABELS = {
     "new": "🆕 новая",
@@ -69,6 +79,8 @@ PRICE_CHECK_PROMPT = ("Ты — строгий классификатор. Ус�
                       "По диалогу определи, соответствует ли запрашиваемая клиентом услуга этим услугам "
                       "(учитывай синонимы: \"подстричься\", \"гель-лак\", \"покрасить корни\", \"ноготочки\" и т.п.). "
                       "Ответь строго одним словом: ДА или НЕТ.")
+
+# ---------- БАЗА ДАННЫХ ----------
 
 def db_connect():
     return psycopg2.connect(DATABASE_URL, sslmode="prefer")
@@ -144,6 +156,85 @@ def fetch_leads(limit=10):
     conn.close()
     return rows
 
+# ---------- DIKIDI ИНТЕГРАЦИЯ ----------
+
+def get_free_slots(service_name):
+    """Получает свободные слоты из DIKIDI для услуги"""
+    service_id = None
+    for keyword, sid in SERVICE_MAPPING.items():
+        if keyword in service_name.lower():
+            service_id = sid
+            break
+    
+    if not service_id:
+        return None, None, "Услуга не найдена в DIKIDI"
+    
+    try:
+        url = "https://dikidi.net/ru/mobile/ajax/newrecord/get_datetimes/"
+        params = {
+            "company_id": DIKIDI_COMPANY_ID,
+            "service_id[]": service_id,
+            "with_first": "1",
+            "day_month": ""
+        }
+        headers = {
+            "User-Agent": "Mozilla/5.0",
+            "X-Requested-With": "XMLHttpRequest",
+            "Referer": f"https://dikidi.net/{DIKIDI_COMPANY_ID}"
+        }
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Извлекаем мастеров и слоты
+        masters = data.get("masters", {})
+        times = data.get("times", {})
+        
+        # Собираем все слоты от всех мастеров
+        all_slots = []
+        for master_id, slots in times.items():
+            master_name = masters.get(master_id, {}).get("username", "Мастер")
+            for slot in slots:
+                dt = datetime.strptime(slot, "%Y-%m-%d %H:%M:%S")
+                all_slots.append({"datetime": dt, "master": master_name, "master_id": master_id})
+        
+        # Сортируем по дате/времени
+        all_slots.sort(key=lambda x: x["datetime"])
+        
+        return all_slots, masters, None
+    except Exception as e:
+        logging.error("DIKIDI error: %s", e)
+        return None, None, str(e)
+
+def filter_slots_by_request(slots, user_request):
+    """Фильтрует слоты по запросу клиента (сегодня/завтра/утро/вечер)"""
+    if not slots:
+        return []
+    
+    now = datetime.now()
+    filtered = []
+    
+    # Простая эвристика: если упомянуто "завтра" — берём только завтра
+    if "завтра" in user_request.lower():
+        tomorrow = now + timedelta(days=1)
+        filtered = [s for s in slots if s["datetime"].date() == tomorrow.date()]
+    # Если "сегодня" — только сегодня
+    elif "сегодня" in user_request.lower():
+        filtered = [s for s in slots if s["datetime"].date() == now.date()]
+    # Если "утро" — до 12:00
+    elif "утро" in user_request.lower() or "утром" in user_request.lower():
+        filtered = [s for s in slots if s["datetime"].hour < 12]
+    # Если "вечер" — после 18:00
+    elif "вечер" in user_request.lower() or "вечером" in user_request.lower():
+        filtered = [s for s in slots if s["datetime"].hour >= 18]
+    # Иначе — все ближайшие 5 слотов
+    else:
+        filtered = slots[:5]
+    
+    return filtered[:5]  # Не более 5 вариантов
+
+# ---------- AI ----------
+
 def ask_yandex_gpt(user_text, history, system_text=None):
     url = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
     headers = {
@@ -178,6 +269,8 @@ def check_in_price(history):
     except Exception as e:
         logging.error("Price check error: %s", e)
         return True
+
+# ---------- ОБРАБОТЧИКИ ----------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
@@ -246,7 +339,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "book":
         await query.edit_message_text(
             "📝 Отлично! Напишите своими словами: какую услугу хотите, "
-            "к кому и когда. Например: «Хочу к Алии на стрижку в субботу вечером»."
+            "к кому и когда. Например: «Хочу к Алии на стрижку завтра после обеда»."
         )
     elif data == "my_bookings":
         await query.edit_message_text("📅 У вас пока нет активных записей.")
@@ -257,6 +350,43 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     await update.effective_chat.send_action(ChatAction.TYPING)
     history = context.user_data.setdefault("history", [])
+
+    # Проверяем, есть ли в сообщении упоминание услуги для записи
+    booking_keywords = ["записаться", "запись", "хочу", "нужно", "можно"]
+    is_booking_request = any(kw in text.lower() for kw in booking_keywords)
+    
+    # Пытаемся определить услугу из запроса
+    detected_service = None
+    for service_key in SERVICE_MAPPING.keys():
+        if service_key in text.lower():
+            detected_service = service_key
+            break
+    
+    # Если это запрос на запись и мы нашли услугу — показываем реальные слоты
+    if is_booking_request and detected_service:
+        slots, masters, error = get_free_slots(detected_service)
+        if slots:
+            filtered = filter_slots_by_request(slots, text)
+            if filtered:
+                slots_text = "🗓 **Свободные окна:**\n\n"
+                for i, slot in enumerate(filtered[:5], 1):
+                    dt_str = slot["datetime"].strftime("%d.%m %H:%M")
+                    slots_text += f"{i}. {dt_str} — {slot['master']}\n"
+                slots_text += "\nКакое время удобно? Напишите номер или точное время."
+                
+                await update.message.reply_text(slots_text)
+                
+                # Сохраняем в историю, что показали слоты
+                history.append({"role": "user", "text": text})
+                history.append({"role": "assistant", "text": slots_text})
+                context.user_data["history"] = history[-6:]
+                return
+            else:
+                await update.message.reply_text(
+                    "😔 К сожалению, на выбранные даты нет свободных окон. "
+                    "Попробуйте другой день или напишите «покажи все окна»."
+                )
+                return
 
     phone_match = PHONE_REGEX.search(text)
     if phone_match:
@@ -342,7 +472,7 @@ def main():
     app.add_handler(CommandHandler("leads", leads_command))
     app.add_handler(CallbackQueryHandler(button))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    print("✅ Бот запущен на своём сервере!")
+    print("✅ Бот с DIKIDI-зрением запущен!")
     app.run_polling()
 
 if __name__ == "__main__":
